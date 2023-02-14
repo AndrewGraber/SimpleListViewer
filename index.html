@@ -1,0 +1,99 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+        <title>Custom List Viewer</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            h1, p {
+                text-align: center;
+            }
+
+            table, th, td {
+                table-layout: auto;
+                border: 1px solid rgb(50, 50, 50);
+                border-collapse: collapse;
+            }
+
+            table {
+                width: 90%;
+                margin-left: 5%;
+            }
+
+            details {
+                width: 90%;
+                margin: 1em;
+                margin-left: 5%;
+                padding: 0.5em;
+                border: 1px solid rgb(50, 50, 50);
+            }
+
+            div#log {
+                margin-left: 2em;
+            }
+        </style>
+    </head>
+    <body>
+        <h1 style="margin-top: 1em">Custom List Viewer</h1>
+        <p style="margin-top: 1em">I just threw this together in an hour or two, because according to NetDocuments, Excel is not to be trusted and may 'corrupt' our data.</p>
+        <p style="margin-top: 0.5em; margin-bottom: 1em">They reccommend using OpenOffice or LibreOffice, so as to not mess with leading zeros and whatnot. OpenOffice is apparently incapable of loading a CSV file with more than about 550 rows, so here we are.</p>
+        <details>
+            <summary>Automatic Tools Log</summary>
+            <div id="log">Here is some text<br>and some more<br>and even more</div>
+        </details>
+        <table>
+            <thead>
+                <tr><th>Contact Number</th><th>Contact Name</th></tr>
+            </thead>
+            <tbody id="data"></tbody>
+        </table>
+
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.3/jquery.min.js" integrity="sha512-STof4xm1wgkfm7heWqFJVn58Hm3EtS31XFaagaa8VMReCXAkQnJZ+jEy8PCC/iT18dFy95WcExNHFTqLyp72eQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script type="text/javascript" src="/socket.io/socket.io.js"></script>
+        <script type="text/javascript">
+            var socket;
+            var pageData = [];
+            var usedNumbers = {};
+            var lastAutoNumber = 0;
+
+            function buildDataToPage() {
+                var output = "";
+                pageData.forEach((row) => {
+                    const parsedNumber = parseInt(row[0]);
+                    if(!isNaN(parsedNumber)) {
+                        usedNumbers[row[0]] = row[1];
+                    }
+
+                    output += "<tr><td>" + row[0] + "</td><td>" + row[1] + "</td></tr>";
+                });
+
+                $("#data").html(output);
+                console.log(usedNumbers);
+
+                for(var i=1; i < 7000; i++) {
+                    if(!usedNumbers['' + i]){
+                        $('#log').html("First Unused Number: " + i);
+                        console.log(usedNumbers[i-1])
+                        break;
+                    }
+                }
+            }
+
+            $(document).ready(function () {
+                socket = io();
+
+                socket.on('pull_data_resp', function(data_in) {
+                    pageData = data_in;
+                    console.log(pageData);
+                    buildDataToPage();
+                });
+
+                socket.emit('pull_data', true);
+            });
+        </script>
+    </body>
+</html>
