@@ -3,6 +3,24 @@
     <head>
         <title>Custom List Viewer</title>
         <style>
+            @keyframes colorflash {
+                0% {
+                    color: rgb(255, 255, 255);
+                }
+
+                50% {
+                    color: rgb(255, 255, 255);
+                }
+
+                75% {
+                    color: rgb(255, 246, 118);
+                }
+
+                100% {
+                    color: rgb(255, 255, 255);
+                }
+            }
+
             * {
                 margin: 0;
                 padding: 0;
@@ -35,15 +53,74 @@
             div#log {
                 margin-left: 2em;
             }
+
+            div#tools {
+                width: 90%;
+                height: 5vh;
+                margin-left: 5%;
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.2em;
+            }
+
+            div.tool-button {
+                height: 100%;
+                flex: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                background-color: rgb(162, 255, 166);
+            }
+
+            div.tool-button:not(:first-child) {
+                border-left: 1px solid rgb(50, 50, 50);
+            }
+
+            div.tool-button:hover {
+                background-color: rgb(26, 226, 36);
+            }
+
+            div.tool-button.unsaved {
+                background-color: rgb(255, 115, 115);
+            }
+
+            div.tool-button.unsaved:hover {
+                background-color: rgb(223, 20, 20);
+            }
+
+            div#save-reminder {
+                display: none;
+                position: fixed;
+                bottom: 5vh;
+                right: 5vh;
+                padding: 1em;
+                border-radius: 5vh;
+                background-color: rgb(224, 54, 54);
+                color: rgb(255, 255, 255);
+                font-weight: bold;
+                font-size: 1.5em;
+                animation: 5s linear 0s infinite colorflash;
+            }
         </style>
     </head>
     <body>
         <h1 style="margin-top: 1em">Custom List Viewer</h1>
         <p style="margin-top: 1em">I just threw this together in an hour or two, because according to NetDocuments, Excel is not to be trusted and may 'corrupt' our data.</p>
         <p style="margin-top: 0.5em; margin-bottom: 1em">They reccommend using OpenOffice or LibreOffice, so as to not mess with leading zeros and whatnot. OpenOffice is apparently incapable of loading a CSV file with more than about 550 rows, so here we are.</p>
+        <div id="tools">
+            <div class="tool-button" id="fill-numbers">
+                <p>Auto-Generate Missing Numbers</p>
+            </div>
+            <div class="tool-button" id="save-changes">
+                <p>Save Changes</p>
+            </div>
+        </div>
         <details>
             <summary>Automatic Tools Log</summary>
-            <div id="log">Here is some text<br>and some more<br>and even more</div>
+            <div id="log">There is nothing to see here yet.</div>
         </details>
         <table>
             <thead>
@@ -52,35 +129,58 @@
             <tbody id="data"></tbody>
         </table>
 
+        <div id="save-reminder">Don't forget to save your changes!</div>
+
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.3/jquery.min.js" integrity="sha512-STof4xm1wgkfm7heWqFJVn58Hm3EtS31XFaagaa8VMReCXAkQnJZ+jEy8PCC/iT18dFy95WcExNHFTqLyp72eQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
         <script type="text/javascript" src="/socket.io/socket.io.js"></script>
         <script type="text/javascript">
             var socket;
             var pageData = [];
-            var usedNumbers = {};
-            var lastAutoNumber = 0;
+            var nextAutoNumber = 0;
+            var hasUnsavedChanges = false;
+            var log = "";
+
+            function writeLog(msg) {
+                var htmlMsg = msg.replace(/(?:\r\n|\r|\n)/g, '<br>');
+                log += htmlMsg + "<br>";
+                $("#log").html(log);
+            }
+
+            function markUnsavedChanges() {
+                hasUnsavedChanges = true;
+                $("#save-changes").addClass('unsaved');
+                $("#save-reminder").css('display', 'block');
+            }
 
             function buildDataToPage() {
                 var output = "";
-                pageData.forEach((row) => {
+                pageData.forEach((row, index) => {
                     const parsedNumber = parseInt(row[0]);
-                    if(!isNaN(parsedNumber)) {
-                        usedNumbers[row[0]] = row[1];
+                    if(!isNaN(parsedNumber) && parsedNumber >= nextAutoNumber) {
+                        nextAutoNumber = parsedNumber + 1;
                     }
 
                     output += "<tr><td>" + row[0] + "</td><td>" + row[1] + "</td></tr>";
                 });
 
                 $("#data").html(output);
-                console.log(usedNumbers);
+            }
 
-                for(var i=1; i < 7000; i++) {
-                    if(!usedNumbers['' + i]){
-                        $('#log').html("First Unused Number: " + i);
-                        console.log(usedNumbers[i-1])
-                        break;
+            function generateNumbers() {
+                var numGenerated = 0;
+
+                pageData.forEach((row, index, data) => {
+                    if(row[0] == "") {
+                        data[index][0] = "" + nextAutoNumber;
+                        writeLog("<input type='checkbox' /> Set Contact Number for '" + data[index][1] + "' to " + data[index][0]);
+                        nextAutoNumber++;
+                        numGenerated++;
                     }
-                }
+                });
+
+                buildDataToPage();
+                writeLog("Finished auto-generating a total of " + numGenerated + " missing Contact Numbers. Checkboxes are included to help track your entries into the system.");
+                if(numGenerated > 0) markUnsavedChanges();
             }
 
             $(document).ready(function () {
@@ -93,6 +193,10 @@
                 });
 
                 socket.emit('pull_data', true);
+
+                $("#fill-numbers").on('click', function() {
+                    generateNumbers();
+                });
             });
         </script>
     </body>
