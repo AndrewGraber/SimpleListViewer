@@ -10,30 +10,67 @@ const io = new Server(server, {
 
 const fs = require('fs');
 const { parse } = require('csv-parse/sync');
+const { stringify } = require('csv-stringify/sync');
 
 const random_name = require('node-random-name');
 
-const inFile = './ContactsExport.csv';
-const outFile = './HLOContacts.csv';
+//Config Values
+const config = {
+    ID_NAME: "Matter Number",
+    HEADER_1: "Matter Number",
+    HEADER_2: "Matter Name",
+    IN_FILE: "./MatterExport.csv",
+    OUT_FILE: "./HLO_Matters.csv",
+    CSV_IN_NAME_TITLE: "Matter: Name",
+    CSV_IN_NUMBER_TITLE: "Matter: Number"
+};
 
-const rawIn = fs.readFileSync(inFile, {encoding: 'ascii', flag: 'r'});
+const rawIn = fs.readFileSync(config.IN_FILE, {encoding: 'ascii', flag: 'r'});
 const recordsIn = parse(rawIn, {columns: true});
 var data = [];
 
 recordsIn.forEach((row, i) => {
-    if(!row.hasOwnProperty('Display Name') || !row.hasOwnProperty('Contact: Number')) {
+    if(!row.hasOwnProperty(config.CSV_IN_NAME_TITLE) || !row.hasOwnProperty(config.CSV_IN_NUMBER_TITLE)) {
         console.error("Missing data for the following entry:");
         console.error(row);
     }
-    data.push([row['Contact: Number'], row['Display Name']]);
+    data.push([row[config.CSV_IN_NUMBER_TITLE], row[config.CSV_IN_NAME_TITLE]]);
 });
+
+function saveNewFile(new_data) {
+    var success = true;
+    const writableStream = fs.createWriteStream(config.OUT_FILE);
+    const columns = [
+        config.HEADER_1,
+        config.HEADER_2
+    ];
+
+    const csv_data = stringify(new_data, { header: true, columns: columns });
+    
+    fs.writeFile(config.OUT_FILE, csv_data, err => {
+        if(err) {
+            success = false;
+            console.error(err);
+        }
+    });
+
+    if(success) {
+        console.log("Successfully saved new data to \'" + config.OUT_FILE + "\'!");
+    } else {
+        console.log("Error saving new data!");
+    }
+
+    return success;
+}
 
 data = data.sort(sortFn);
 console.log(data);
 
 app.get('/', (req, res) => {
-    res.sendFile(__dirname + "/index.html");
+    res.sendFile(__dirname + "/public/index.html");
 });
+
+app.use(express.static('public'))
 
 function sortFn(a, b) {
     if(isNaN(parseInt(a[0]))) {
@@ -59,9 +96,20 @@ io.on('connection', (socket) => {
     });
 
     socket.on('pull_data', (msg) => {
-        console.log('Got pull request from the user known as \'' + socket.random_name + '\'!');
+        console.log('Got pull request for CSV data from the user known as \'' + socket.random_name + '\'.');
         socket.emit('pull_data_resp', data);
     });
+
+    socket.on('pull_config', (msg) => {
+        console.log('Got pull request for config data from the user known as \'' + socket.random_name + '\'.')
+        socket.emit('pull_config_resp', config);
+    });
+
+    socket.on('save_changes', (new_data) => {
+        console.log('Got request to save changes from the user known as \'' + socket.random_name + '\'.');
+        success = saveNewFile(new_data);
+        socket.emit('save_changes_resp', success);
+    })
 });
 
 server.listen(3000, () => {
